@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production & Build Artifacts
+dist/
+build/
+coverage/
+
+# Environment & Secrets (Never commit credentials)
+.env
+.env.*
+!.env.example
+
+# Local Fallback Data Stores
+.data/
+server/.data/
+*.sqlite
+*.db
+
+# Logs & Runtime Files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
