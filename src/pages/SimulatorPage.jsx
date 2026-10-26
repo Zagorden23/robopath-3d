@@ -202,7 +202,7 @@ export function SimulatorPage() {
   const pathLengthMeters = ((planResult?.pathLength || 0) * cellSize).toFixed(2);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 lg:h-[calc(100vh-3.5rem)] overflow-x-hidden bg-[var(--bg-darkest)]">
+    <div className="flex-1 flex flex-col min-h-0 lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden overflow-x-hidden bg-[var(--bg-darkest)]">
       {/* 1. TOP WORKSPACE CONTROL BAR (Clean, Non-Overlapping) */}
       <div className="shrink-0 px-4 py-2.5 bg-[#fbf7e8] border-b border-[var(--border-medium)] flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -329,9 +329,9 @@ export function SimulatorPage() {
       </div>
 
       {/* 2. MAIN 3-COLUMN WORKSPACE (Zero Overlapping Panels) */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* LEFT COLUMN: Environment Editor, Planner Controls, & 3D Appearance */}
-        <aside className="w-full lg:w-80 xl:w-84 shrink-0 bg-[#fbf7e8] border-b lg:border-b-0 lg:border-r border-[var(--border-medium)] flex flex-col min-h-0 max-h-[58vh] lg:max-h-none">
+        <aside className="w-full lg:w-72 xl:w-80 shrink-0 bg-[#fbf7e8] border-b lg:border-b-0 lg:border-r border-[var(--border-medium)] flex flex-col min-h-0 max-h-[58vh] lg:max-h-none">
           {/* Left Panel Category Tabs */}
           <div className="grid grid-cols-3 gap-1 p-2 bg-[#f2ebd2] border-b border-[var(--border-subtle)] text-xs font-semibold">
             <button
@@ -784,7 +784,7 @@ export function SimulatorPage() {
           {/* Viewport Area */}
           <div className="flex-1 min-h-0 flex flex-col xl:flex-row relative overflow-y-auto xl:overflow-hidden">
             {/* Primary 3D Canvas Container */}
-            <div className="relative flex-1 min-w-0 min-h-[320px] xl:min-h-0">
+            <div className="relative w-full h-[420px] lg:h-auto lg:flex-1 lg:min-h-[300px] xl:min-h-0 min-w-0">
               <SimulatorScene
                 gridEnv={env}
                 robotConfig={{ model: robotModel }}
@@ -1002,7 +1002,7 @@ export function SimulatorPage() {
         </section>
 
         {/* RIGHT COLUMN: Docked Telemetry Metrics & Live Mathematical Intelligence */}
-        <aside className="w-full lg:w-80 xl:w-92 shrink-0 min-h-0 max-h-[60vh] lg:max-h-none bg-[#fbf7e8] border-t lg:border-t-0 lg:border-l border-[var(--border-medium)] overflow-y-auto p-4 space-y-4 text-xs">
+        <aside className="w-full lg:w-72 xl:w-80 shrink-0 min-h-0 max-h-[60vh] lg:max-h-none bg-[#fbf7e8] border-t lg:border-t-0 lg:border-l border-[var(--border-medium)] overflow-y-auto p-4 space-y-4 text-xs">
           {/* Card 1: Measured Simulation Telemetry */}
           <div className="p-4 rounded-2xl bg-[#ffffff] border border-[var(--border-subtle)] space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">

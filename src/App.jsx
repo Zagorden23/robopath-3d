@@ -44,11 +44,11 @@ function AppLayout() {
   const isFullViewport3D = location.pathname === '/simulator';
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-darkest)] text-[var(--text-primary)]">
+    <div className={"flex flex-col min-h-screen " + (isFullViewport3D ? "lg:h-screen lg:overflow-hidden" : "") + " bg-[var(--bg-darkest)] text-[var(--text-primary)]"}>
       <Navbar />
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         {!isLandingOrAuth && <AppSidebar />}
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0">
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
             <Route path="/" element={<LandingPage />} />
