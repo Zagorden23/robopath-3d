@@ -17,6 +17,7 @@ export function getStorePath() {
 }
 
 let isMongoConnected = false;
+let lastMongoError = null;
 
 const EMPTY_STORE = {
   users: [],
@@ -76,22 +77,24 @@ export async function connectDatabase(customUri) {
 
   try {
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2000,
-      connectTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 3500,
+      connectTimeoutMS: 3500,
     });
     isMongoConnected = true;
+    lastMongoError = null;
     console.log('[RoboPath DB] Connected to MongoDB via Mongoose.');
     return { mode: 'mongodb' };
   } catch (err) {
-    if (process.env.NODE_ENV === 'production') {
+    lastMongoError = err.code || err.message || 'Connection failed';
+    if (process.env.STRICT_MONGODB_REQUIRED === 'true') {
       throw new Error(
-        `MongoDB connection failed in production: ${err.code || err.message}`
+        `MongoDB connection failed in strict mode: ${lastMongoError}`
       );
     }
     isMongoConnected = false;
     ensureLocalStore();
     console.log(
-      `[RoboPath DB] MongoDB daemon not reachable (${err.code || err.message}) — active mode: Mongoose Schema Validation + Persistent Store.`
+      `[RoboPath DB] MongoDB daemon not reachable (${lastMongoError}) — active mode: Mongoose Schema Validation + Persistent Store.`
     );
     return { mode: 'mongoose-validated-local-store' };
   }
@@ -114,6 +117,8 @@ export function getDatabaseStatus() {
     connected,
     mode: connected ? 'mongodb' : 'mongoose-validated-local-store',
     readyState,
+    mongoUriConfigured: Boolean(process.env.MONGODB_URI),
+    lastError: connected ? null : lastMongoError,
   };
 }
 
