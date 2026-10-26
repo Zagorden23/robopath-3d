@@ -202,7 +202,7 @@ export function SimulatorPage() {
   const pathLengthMeters = ((planResult?.pathLength || 0) * cellSize).toFixed(2);
 
   return (
-    <div className="flex-1 flex flex-col lg:h-[calc(100vh-3.5rem)] overflow-x-hidden bg-[var(--bg-darkest)]">
+    <div className="flex-1 flex flex-col min-h-0 lg:h-[calc(100vh-3.5rem)] overflow-x-hidden bg-[var(--bg-darkest)]">
       {/* 1. TOP WORKSPACE CONTROL BAR (Clean, Non-Overlapping) */}
       <div className="shrink-0 px-4 py-2.5 bg-[#fbf7e8] border-b border-[var(--border-medium)] flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -331,7 +331,7 @@ export function SimulatorPage() {
       {/* 2. MAIN 3-COLUMN WORKSPACE (Zero Overlapping Panels) */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
         {/* LEFT COLUMN: Environment Editor, Planner Controls, & 3D Appearance */}
-        <aside className="w-full lg:w-80 xl:w-84 shrink-0 bg-[#fbf7e8] border-b lg:border-b-0 lg:border-r border-[var(--border-medium)] flex flex-col min-h-0">
+        <aside className="w-full lg:w-80 xl:w-84 shrink-0 bg-[#fbf7e8] border-b lg:border-b-0 lg:border-r border-[var(--border-medium)] flex flex-col min-h-0 max-h-[58vh] lg:max-h-none">
           {/* Left Panel Category Tabs */}
           <div className="grid grid-cols-3 gap-1 p-2 bg-[#f2ebd2] border-b border-[var(--border-subtle)] text-xs font-semibold">
             <button
@@ -780,11 +780,11 @@ export function SimulatorPage() {
         </aside>
 
         {/* CENTER COLUMN: 3D Viewport (and Split 2D Grid) + Docked Bottom Playback Bar */}
-        <section className="flex-1 min-w-0 flex flex-col bg-[var(--bg-darkest)] overflow-hidden">
+        <section className="flex-1 min-w-0 min-h-0 flex flex-col bg-[var(--bg-darkest)] overflow-hidden">
           {/* Viewport Area */}
-          <div className="flex-1 min-h-[380px] flex flex-col xl:flex-row relative overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col xl:flex-row relative overflow-y-auto xl:overflow-hidden">
             {/* Primary 3D Canvas Container */}
-            <div className="flex-1 min-w-0 h-full relative">
+            <div className="relative flex-1 min-w-0 min-h-[320px] xl:min-h-0">
               <SimulatorScene
                 gridEnv={env}
                 robotConfig={{ model: robotModel }}
@@ -811,7 +811,7 @@ export function SimulatorPage() {
             {/* Optional Synchronized Split 2D Interactive Grid */}
             {viewMode === 'split' && (
               <div
-                className="w-full xl:w-[44%] h-72 xl:h-full shrink-0 bg-[#fbf7e8] border-t xl:border-t-0 xl:border-l border-[var(--border-medium)] p-3 flex flex-col items-center justify-center overflow-auto select-none"
+                className="w-full xl:w-[44%] h-[320px] xl:h-auto shrink-0 bg-[#fbf7e8] border-t xl:border-t-0 xl:border-l border-[var(--border-medium)] p-3 flex flex-col items-center justify-center overflow-auto select-none"
                 onMouseLeave={() => {
                   if (isDragging2D) {
                     setIsDragging2D(false);
@@ -1002,7 +1002,7 @@ export function SimulatorPage() {
         </section>
 
         {/* RIGHT COLUMN: Docked Telemetry Metrics & Live Mathematical Intelligence */}
-        <aside className="w-full lg:w-80 xl:w-92 shrink-0 bg-[#fbf7e8] border-t lg:border-t-0 lg:border-l border-[var(--border-medium)] overflow-y-auto p-4 space-y-4 text-xs">
+        <aside className="w-full lg:w-80 xl:w-92 shrink-0 min-h-0 max-h-[60vh] lg:max-h-none bg-[#fbf7e8] border-t lg:border-t-0 lg:border-l border-[var(--border-medium)] overflow-y-auto p-4 space-y-4 text-xs">
           {/* Card 1: Measured Simulation Telemetry */}
           <div className="p-4 rounded-2xl bg-[#ffffff] border border-[var(--border-subtle)] space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
