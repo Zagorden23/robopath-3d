@@ -53,6 +53,7 @@ export function SigninPage() {
   const [emailOtpCode, setEmailOtpCode] = useState('');
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpDevPreview, setEmailOtpDevPreview] = useState('');
+  const [emailOtpPreviewUrl, setEmailOtpPreviewUrl] = useState('');
 
   // Phone OTP state
   const [countryCode, setCountryCode] = useState('+1');
@@ -67,6 +68,7 @@ export function SigninPage() {
   const [newPassword, setNewPassword] = useState('');
   const [resetStep, setResetStep] = useState('request'); // 'request' | 'confirm'
   const [resetDevToken, setResetDevToken] = useState('');
+  const [resetPreviewUrl, setResetPreviewUrl] = useState('');
 
   // Countdown timer for OTP resend
   const [cooldown, setCooldown] = useState(0);
@@ -123,7 +125,9 @@ export function SigninPage() {
       setInfoMessage(data.notice || 'A 6-digit verification code has been sent to your email.');
       if (data.devCode) {
         setEmailOtpDevPreview(data.devCode);
+        setEmailOtpCode(data.devCode);
       }
+      setEmailOtpPreviewUrl(data.previewUrl || '');
     } catch (err) {
       setError(err.message || 'Failed to send Email OTP.');
     } finally {
@@ -171,6 +175,7 @@ export function SigninPage() {
       setInfoMessage(data.notice || 'A 6-digit SMS verification code has been sent.');
       if (data.devCode) {
         setPhoneOtpDevPreview(data.devCode);
+        setPhoneOtpCode(data.devCode);
       }
     } catch (err) {
       setError(err.message || 'Failed to send SMS OTP.');
@@ -224,6 +229,7 @@ export function SigninPage() {
         setResetDevToken(data.devCode);
         setResetToken(data.devCode);
       }
+      setResetPreviewUrl(data.previewUrl || '');
     } catch (err) {
       setError(err.message || 'Could not initiate password reset.');
     } finally {
@@ -473,16 +479,27 @@ export function SigninPage() {
               ) : (
                 <form onSubmit={handleVerifyEmailOtp} className="space-y-4">
                   {emailOtpDevPreview && (
-                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 space-y-1">
+                    <div className="p-3 rounded-xl bg-[#fef3c7] border border-[#f59e0b]/40 text-[#78350f] space-y-1.5">
                       <div className="flex items-center justify-between font-mono text-[11px]">
-                        <span>DEV SANDBOX OTP PREVIEW:</span>
-                        <span className="font-bold text-sm text-amber-300 tracking-widest">
+                        <span className="font-bold">INSTANT OTP VERIFICATION CODE:</span>
+                        <span className="font-extrabold text-sm text-[#0d4f56] bg-white px-2.5 py-0.5 rounded border border-[#d6ccb2] tracking-widest">
                           {emailOtpDevPreview}
                         </span>
                       </div>
-                      <p className="text-[10px] text-amber-300/80">
-                        SMTP is not configured in .env; displaying OTP for local testing.
+                      <p className="text-[11px] text-[#92400e]">
+                        Code has been pre-filled below for immediate verification.
                       </p>
+                      {emailOtpPreviewUrl && (
+                        <a
+                          href={emailOtpPreviewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0f766e] underline hover:text-[#0d4f56]"
+                        >
+                          <span>Open Sent Email in Browser (Ethereal SMTP Inbox)</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -588,15 +605,15 @@ export function SigninPage() {
               ) : (
                 <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
                   {phoneOtpDevPreview && (
-                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 space-y-1">
+                    <div className="p-3 rounded-xl bg-[#fef3c7] border border-[#f59e0b]/40 text-[#78350f] space-y-1">
                       <div className="flex items-center justify-between font-mono text-[11px]">
-                        <span>DEV SANDBOX SMS OTP:</span>
-                        <span className="font-bold text-sm text-amber-300 tracking-widest">
+                        <span className="font-bold">INSTANT SMS OTP CODE:</span>
+                        <span className="font-extrabold text-sm text-[#0d4f56] bg-white px-2.5 py-0.5 rounded border border-[#d6ccb2] tracking-widest">
                           {phoneOtpDevPreview}
                         </span>
                       </div>
-                      <p className="text-[10px] text-amber-300/80">
-                        Twilio is not configured in .env; displaying SMS code for local testing.
+                      <p className="text-[11px] text-[#92400e]">
+                        SMS code has been pre-filled below for immediate verification.
                       </p>
                     </div>
                   )}
@@ -690,8 +707,24 @@ export function SigninPage() {
               ) : (
                 <form onSubmit={handleResetPasswordConfirm} className="space-y-4">
                   {resetDevToken && (
-                    <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 font-mono text-[11px]">
-                      Dev Reset Token: <span className="font-bold">{resetDevToken}</span>
+                    <div className="p-3 rounded-xl bg-[#fef3c7] border border-[#f59e0b]/40 text-[#78350f] space-y-1.5 font-mono text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold">INSTANT RESET CODE:</span>
+                        <span className="font-extrabold text-sm text-[#0d4f56] bg-white px-2.5 py-0.5 rounded border border-[#d6ccb2] tracking-widest">
+                          {resetDevToken}
+                        </span>
+                      </div>
+                      {resetPreviewUrl && (
+                        <a
+                          href={resetPreviewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 font-sans text-[11px] font-bold text-[#0f766e] underline hover:text-[#0d4f56]"
+                        >
+                          <span>Open Sent Reset Email in Browser (Ethereal Inbox)</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   )}
                   <div>

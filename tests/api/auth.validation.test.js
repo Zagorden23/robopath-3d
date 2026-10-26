@@ -445,6 +445,34 @@ describe('Auth & Input Validation API', () => {
       expect(loginRes.body.ok).toBe(true);
     });
 
+    it('falls back gracefully to built-in OTP relay in production when SMTP/Twilio env vars are unset', async () => {
+      const prevEnv = process.env.NODE_ENV;
+      const prevHost = process.env.SMTP_HOST;
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.SMTP_HOST;
+
+        const emailOtpRes = await request(app)
+          .post('/api/auth/email-otp/request')
+          .send({ email: 'prod-otp@robopath.edu' });
+
+        expect(emailOtpRes.status).toBe(200);
+        expect(emailOtpRes.body.ok).toBe(true);
+        expect(emailOtpRes.body.devCode).toMatch(/^\d{6}$/);
+
+        const smsOtpRes = await request(app)
+          .post('/api/auth/phone-otp/request')
+          .send({ countryCode: '+1', phoneNumber: '4155550199' });
+
+        expect(smsOtpRes.status).toBe(200);
+        expect(smsOtpRes.body.ok).toBe(true);
+        expect(smsOtpRes.body.devCode).toMatch(/^\d{6}$/);
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+        if (prevHost !== undefined) process.env.SMTP_HOST = prevHost;
+      }
+    });
+
     it('records simulation results and exports valid CSV', async () => {
       const signup = await request(app).post('/api/auth/signup').send({
         name: 'Experiment User',

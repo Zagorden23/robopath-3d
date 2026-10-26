@@ -281,6 +281,7 @@ router.post('/email-otp/request', otpLimiter, async (req, res) => {
       deliveryProvider: delivery.provider,
       delivered: delivery.delivered,
       devCode: delivery.devCode,
+      previewUrl: delivery.previewUrl || null,
       notice: delivery.notice,
     });
   } catch (err) {
@@ -593,6 +594,7 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       deliveryProvider: delivery.provider,
       delivered: delivery.delivered,
       devCode: delivery.devCode,
+      previewUrl: delivery.previewUrl || null,
       notice: delivery.notice,
     });
   } catch (err) {
