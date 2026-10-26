@@ -17,6 +17,8 @@ export function getStorePath() {
 }
 
 let isMongoConnected = false;
+let mongoEngineMode = 'disconnected';
+let embeddedMongoServer = null;
 let lastMongoError = null;
 
 const EMPTY_STORE = {
@@ -62,6 +64,63 @@ function writeLocalStore(data) {
   fs.writeFileSync(getStorePath(), JSON.stringify(data, null, 2), 'utf8');
 }
 
+async function hydrateMongoFromDiskSnapshot() {
+  try {
+    const store = readLocalStore();
+    if (store.users.length > 0 && (await User.countDocuments()) === 0) {
+      for (const u of store.users) {
+        const doc = { ...u };
+        if (doc._id && !mongoose.Types.ObjectId.isValid(String(doc._id))) {
+          delete doc._id;
+        }
+        await User.create(doc).catch(() => {});
+      }
+    }
+    if (store.scenarios.length > 0 && (await Scenario.countDocuments()) === 0) {
+      for (const s of store.scenarios) {
+        const doc = { ...s };
+        if (doc._id && !mongoose.Types.ObjectId.isValid(String(doc._id))) {
+          delete doc._id;
+        }
+        await Scenario.create(doc).catch(() => {});
+      }
+    }
+    if (store.simulations.length > 0 && (await SimulationResult.countDocuments()) === 0) {
+      for (const r of store.simulations) {
+        const doc = { ...r };
+        if (doc._id && !mongoose.Types.ObjectId.isValid(String(doc._id))) {
+          delete doc._id;
+        }
+        await SimulationResult.create(doc).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[RoboPath DB] Snapshot hydration warning:', err.message);
+  }
+}
+
+async function syncMongoToDiskSnapshot() {
+  if (!isMongoConnected || mongoose.connection.readyState !== 1) return;
+  try {
+    const current = readLocalStore();
+    const [users, scenarios, simulations, otps] = await Promise.all([
+      User.find({}).lean(),
+      Scenario.find({}).lean(),
+      SimulationResult.find({}).lean(),
+      OtpRecord.find({}).lean(),
+    ]);
+    writeLocalStore({
+      users: users.map((u) => ({ ...u, _id: String(u._id) })),
+      scenarios: scenarios.map((s) => ({ ...s, _id: String(s._id) })),
+      simulations: simulations.map((r) => ({ ...r, _id: String(r._id) })),
+      otps: otps.map((o) => ({ ...o, _id: String(o._id) })),
+      passwordResets: current.passwordResets || [],
+    });
+  } catch {
+    // Non-blocking snapshot write
+  }
+}
+
 export async function connectDatabase(customUri) {
   const uri =
     customUri || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/robopath';
@@ -71,19 +130,23 @@ export async function connectDatabase(customUri) {
       throw new Error('FORCE_LOCAL_STORE cannot be enabled in production. Configure MongoDB instead.');
     }
     isMongoConnected = false;
+    mongoEngineMode = 'mongoose-validated-local-store';
     ensureLocalStore();
     return { mode: 'mongoose-validated-local-store' };
   }
 
+  // Tier 1: Connect to external MongoDB / MongoDB Atlas URI
   try {
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 3500,
-      connectTimeoutMS: 3500,
+      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 3000,
     });
     isMongoConnected = true;
+    mongoEngineMode = uri.includes('mongodb+srv') ? 'mongodb-atlas' : 'mongodb';
     lastMongoError = null;
-    console.log('[RoboPath DB] Connected to MongoDB via Mongoose.');
-    return { mode: 'mongodb' };
+    console.log(`[RoboPath DB] Connected to MongoDB (${mongoEngineMode}) via Mongoose.`);
+    await hydrateMongoFromDiskSnapshot();
+    return { mode: mongoEngineMode };
   } catch (err) {
     lastMongoError = err.code || err.message || 'Connection failed';
     if (process.env.STRICT_MONGODB_REQUIRED === 'true') {
@@ -91,10 +154,37 @@ export async function connectDatabase(customUri) {
         `MongoDB connection failed in strict mode: ${lastMongoError}`
       );
     }
+  }
+
+  // Tier 2: Boot embedded MongoDB engine (MongoMemoryServer) + Persistent Snapshot Sync
+  try {
+    const { MongoMemoryServer } = await import('mongodb-memory-server');
+    if (!embeddedMongoServer) {
+      embeddedMongoServer = await MongoMemoryServer.create({
+        instance: { dbName: 'robopath' },
+      });
+    }
+    const embeddedUri = embeddedMongoServer.getUri('robopath');
+    await mongoose.connect(embeddedUri, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+    });
+    isMongoConnected = true;
+    mongoEngineMode = 'mongodb-embedded-persisted';
+    lastMongoError = null;
+    ensureLocalStore();
+    await hydrateMongoFromDiskSnapshot();
+    console.log(
+      '[RoboPath DB] Connected to embedded MongoDB engine (MongoMemoryServer) with disk snapshot persistence.'
+    );
+    return { mode: mongoEngineMode };
+  } catch (embeddedErr) {
+    // Tier 3: Fallback to Mongoose Schema Validation + Persistent JSON Store
     isMongoConnected = false;
+    mongoEngineMode = 'mongoose-validated-local-store';
     ensureLocalStore();
     console.log(
-      `[RoboPath DB] MongoDB daemon not reachable (${lastMongoError}) — active mode: Mongoose Schema Validation + Persistent Store.`
+      `[RoboPath DB] Embedded mongod unavailable (${embeddedErr.message}) — active mode: Mongoose Schema Validation + Persistent Store.`
     );
     return { mode: 'mongoose-validated-local-store' };
   }
@@ -115,9 +205,10 @@ export function getDatabaseStatus() {
   const connected = Boolean(isMongoConnected && readyState === 1);
   return {
     connected,
-    mode: connected ? 'mongodb' : 'mongoose-validated-local-store',
+    mode: connected ? mongoEngineMode : 'mongoose-validated-local-store',
     readyState,
-    mongoUriConfigured: Boolean(process.env.MONGODB_URI),
+    snapshotPersistence: true,
+    externalUriConfigured: Boolean(process.env.MONGODB_URI),
     lastError: connected ? null : lastMongoError,
   };
 }
@@ -251,7 +342,14 @@ export const dbRepo = {
     }
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
+      const existing = await User.findOne({ email: mongooseInstance.email });
+      if (existing) {
+        const err = new Error('An account with this email already exists.');
+        err.status = 409;
+        throw err;
+      }
       const saved = await mongooseInstance.save();
+      await syncMongoToDiskSnapshot();
       return formatUserDoc(saved);
     }
 
@@ -278,11 +376,13 @@ export const dbRepo = {
   async updateUser(id, updates) {
     const strId = String(id || '');
     if (isMongoConnected && mongoose.connection.readyState === 1) {
+      if (!mongoose.Types.ObjectId.isValid(strId)) return null;
       const updated = await User.findByIdAndUpdate(
         strId,
         { $set: updates },
         { new: true, runValidators: true }
       );
+      await syncMongoToDiskSnapshot();
       return formatUserDoc(updated);
     }
 
@@ -485,6 +585,7 @@ export const dbRepo = {
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
       const saved = await mongooseScenario.save();
+      await syncMongoToDiskSnapshot();
       return formatScenarioDoc(saved);
     }
 
@@ -505,11 +606,13 @@ export const dbRepo = {
   async updateScenario(id, updates) {
     const strId = String(id || '');
     if (isMongoConnected && mongoose.connection.readyState === 1) {
+      if (!mongoose.Types.ObjectId.isValid(strId)) return null;
       const updated = await Scenario.findByIdAndUpdate(
         strId,
         { $set: updates },
         { new: true, runValidators: true }
       );
+      await syncMongoToDiskSnapshot();
       return formatScenarioDoc(updated);
     }
 
@@ -541,8 +644,10 @@ export const dbRepo = {
   async deleteScenario(id) {
     const strId = String(id || '');
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      await Scenario.findByIdAndDelete(strId);
-      return true;
+      if (!mongoose.Types.ObjectId.isValid(strId)) return false;
+      const deleted = await Scenario.findByIdAndDelete(strId);
+      await syncMongoToDiskSnapshot();
+      return Boolean(deleted);
     }
 
     const store = readLocalStore();
@@ -583,6 +688,7 @@ export const dbRepo = {
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
       const saved = await instance.save();
+      await syncMongoToDiskSnapshot();
       return formatSimulationDoc(saved);
     }
 
@@ -605,10 +711,14 @@ export const dbRepo = {
     const strId = String(id || '');
     const strOwner = String(ownerId || '');
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      const doc = await SimulationResult.findById(strId);
+      const query = mongoose.Types.ObjectId.isValid(strId)
+        ? { $or: [{ _id: strId }, { runId: strId }] }
+        : { runId: strId };
+      const doc = await SimulationResult.findOne(query);
       if (!doc) return { status: 404 };
       if (String(doc.ownerId) !== strOwner) return { status: 403 };
-      await SimulationResult.findByIdAndDelete(strId);
+      await SimulationResult.deleteOne({ _id: doc._id });
+      await syncMongoToDiskSnapshot();
       return { status: 200 };
     }
 

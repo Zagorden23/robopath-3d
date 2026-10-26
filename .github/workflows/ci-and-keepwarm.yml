@@ -1,0 +1,49 @@
+name: CI & Render Keep-Warm
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Keep Render service warm every 14 minutes to prevent free-tier cold starts
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-warm:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Health Check Endpoint
+        run: |
+          response=$(curl -s -w "\n%{http_code}" https://robopath-3d.onrender.com/api/health)
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "Status: $status"
+          echo "Response: $body"
+          if [ "$status" -ne 200 ]; then
+            exit 1
+          fi
+
+  test-and-build:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit & API integration tests (113 tests)
+        run: npm test
+
+      - name: Build production frontend bundle
+        run: npm run build

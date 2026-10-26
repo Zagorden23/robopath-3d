@@ -161,12 +161,60 @@ export const authApi = {
 };
 
 // ============================================================================
-// SAVED ENVIRONMENTS & SCENARIOS API
+// SAVED ENVIRONMENTS & SCENARIOS API (With Client Vault Rehydration)
 // ============================================================================
+const LOCAL_SCENARIOS_KEY = 'robopath_3d_saved_scenarios_v1';
+
+function getLocalScenarios() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_SCENARIOS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLocalScenarios(scenarios) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_SCENARIOS_KEY, JSON.stringify(scenarios.slice(0, 100)));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export const scenariosApi = {
   async list() {
-    const data = await apiRequest('/api/scenarios');
-    return data.scenarios || [];
+    const localScenarios = getLocalScenarios();
+    try {
+      const data = await apiRequest('/api/scenarios');
+      const serverScenarios = data.scenarios || [];
+      const serverNames = new Set(serverScenarios.map((s) => `${s.name}::${s.description || ''}`));
+      const unsynced = localScenarios.filter(
+        (loc) => loc?.name && !serverNames.has(`${loc.name}::${loc.description || ''}`)
+      );
+      if (unsynced.length > 0) {
+        for (const item of unsynced) {
+          try {
+            const created = await apiRequest('/api/scenarios', {
+              method: 'POST',
+              body: JSON.stringify(item),
+            });
+            if (created?.scenario) {
+              serverScenarios.unshift(created.scenario);
+            }
+          } catch {
+            // ignore individual sync errors
+          }
+        }
+      }
+      setLocalScenarios(serverScenarios);
+      return serverScenarios;
+    } catch {
+      return localScenarios;
+    }
   },
 
   async get(id) {
@@ -179,6 +227,10 @@ export const scenariosApi = {
       method: 'POST',
       body: JSON.stringify(scenarioPayload),
     });
+    if (data.scenario) {
+      const existing = getLocalScenarios();
+      setLocalScenarios([data.scenario, ...existing]);
+    }
     return data.scenario;
   },
 
@@ -187,6 +239,10 @@ export const scenariosApi = {
       method: 'POST',
       body: JSON.stringify({ name: customName }),
     });
+    if (data.scenario) {
+      const existing = getLocalScenarios();
+      setLocalScenarios([data.scenario, ...existing]);
+    }
     return data.scenario;
   },
 
@@ -195,10 +251,18 @@ export const scenariosApi = {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    if (data.scenario) {
+      const next = getLocalScenarios().map((s) =>
+        String(s.id || s._id) === String(id) ? data.scenario : s
+      );
+      setLocalScenarios(next);
+    }
     return data.scenario;
   },
 
   async delete(id) {
+    const next = getLocalScenarios().filter((s) => String(s.id || s._id) !== String(id));
+    setLocalScenarios(next);
     return apiRequest(`/api/scenarios/${id}`, {
       method: 'DELETE',
     });
@@ -398,8 +462,17 @@ export const resultsApi = {
     try {
       const data = await apiRequest('/api/results');
       const serverRuns = data.results || [];
-      if (serverRuns.length === 0) return localRuns;
       const seenIds = new Set(serverRuns.map((r) => r.runId));
+      const unsyncedUserRuns = localRuns.filter(
+        (r) => !r.isDemoSeed && r.runId && !seenIds.has(r.runId)
+      );
+      if (unsyncedUserRuns.length > 0) {
+        apiRequest('/api/results', {
+          method: 'POST',
+          body: JSON.stringify({ runs: unsyncedUserRuns.slice(0, 50) }),
+        }).catch(() => {});
+      }
+      if (serverRuns.length === 0) return localRuns;
       const merged = [
         ...serverRuns,
         ...localRuns.filter((r) => !seenIds.has(r.runId)),

@@ -27,6 +27,20 @@ async function bootstrap() {
     await connectDatabase();
     app.listen(PORT, () => {
       console.log(`[RoboPath Server] Listening on http://localhost:${PORT}`);
+
+      // Keep-warm heartbeat in production so Render container avoids cold-start spin-down
+      const externalUrl =
+        process.env.RENDER_EXTERNAL_URL ||
+        (process.env.CLIENT_ORIGIN?.startsWith('https://') ? process.env.CLIENT_ORIGIN : null);
+      if (process.env.NODE_ENV === 'production' && externalUrl) {
+        const healthUrl = `${externalUrl.replace(/\/+$/, '')}/api/health`;
+        const interval = setInterval(() => {
+          fetch(healthUrl).catch(() => {});
+        }, 13 * 60 * 1000);
+        if (typeof interval.unref === 'function') {
+          interval.unref();
+        }
+      }
     });
   } catch (err) {
     console.error('[RoboPath Server] Failed to start:', err);
