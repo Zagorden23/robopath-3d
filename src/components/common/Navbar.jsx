@@ -16,6 +16,8 @@ import {
   BarChart3,
   History,
   Grid,
+  GitCompare,
+  Home,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -32,67 +34,82 @@ export function Navbar() {
   };
 
   const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: '3D Simulator', path: '/simulator' },
-    { name: '2D Simulator', path: '/simulator-2d' },
-    { name: 'Comparison', path: '/algorithms' },
-    { name: 'Experiments', path: '/experiments' },
-    { name: 'Analytics', path: '/analytics' },
-    ...(isAuthenticated ? [{ name: 'Dashboard', path: '/dashboard' }] : []),
+    { name: 'Home', path: '/', icon: Home },
+    ...(isAuthenticated ? [{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
+    { name: '3D Simulator', path: '/simulator', icon: Compass },
+    { name: '2D Simulator', path: '/simulator-2d', icon: Grid },
+    { name: 'Comparison', path: '/algorithms', icon: GitCompare },
+    { name: 'Scenarios', path: '/scenarios', icon: BookmarkCheck },
+    { name: 'Experiments', path: '/experiments', icon: History },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
   ];
 
   const isActive = (path) => {
-    if (path === '/' && location.pathname !== '/') return false;
+    if (path === '/') return location.pathname === '/';
     if (path === '/simulator' && location.pathname === '/simulator-2d') return false;
+    if (path === '/algorithms' && location.pathname === '/comparison') return true;
+    if (path === '/scenarios' && location.pathname === '/environments') return true;
     return location.pathname.startsWith(path);
   };
 
   return (
     <header className="sticky top-0 z-50 dark-teal-nav border-b border-teal-400/25 shadow-md">
-      <div className="container flex items-center justify-between h-14 px-4 md:px-6 max-w-full">
-        {/* Brand Logo */}
-        <Link to="/" className="flex items-center gap-3 group">
+      <div className="w-full flex items-center justify-between gap-3 h-14 px-4 lg:px-6">
+        {/* Left: Brand Logo */}
+        <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-sky-500 flex items-center justify-center shadow-md shadow-teal-950/50 group-hover:scale-105 transition-transform duration-200">
             <Compass className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-heading font-bold text-lg tracking-tight text-[#fdfaf0]">
+          <div className="leading-tight">
+            <div className="flex items-center gap-1.5">
+              <span className="font-heading font-bold text-base sm:text-lg tracking-tight text-[#fdfaf0] whitespace-nowrap">
                 Robo<span className="text-teal-300">Path</span>{' '}
                 <span className="text-amber-300">3D</span>
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-teal-400/15 text-teal-200 border border-teal-300/30 hidden sm:inline-block">
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-teal-400/15 text-teal-200 border border-teal-300/30 hidden xl:inline-block whitespace-nowrap">
                 2D + 3D Sync
               </span>
             </div>
-            <p className="text-[10px] text-teal-100/75 font-mono tracking-wider uppercase leading-none">
+            <p className="text-[9px] text-teal-100/75 font-mono tracking-wider uppercase leading-none hidden sm:block whitespace-nowrap">
               Interactive Motion Planning Lab
             </p>
           </div>
         </Link>
 
-        {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                isActive(link.path)
-                  ? 'bg-[#fdfaf0] text-[#0c353d] font-semibold shadow-sm'
-                  : 'text-teal-50/85 hover:text-white hover:bg-teal-400/15'
-              }`}
-            >
-              {link.name}
-            </Link>
-          ))}
+        {/* Center: Unified Top Horizontal Navigation Bar */}
+        <nav
+          aria-label="Primary Workspace Navigation"
+          className="hidden md:flex items-center justify-center gap-1 lg:gap-1.5 overflow-x-auto py-1"
+        >
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const active = isActive(link.path);
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`inline-flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                  active
+                    ? 'bg-[#fdfaf0] text-[#0c353d] font-bold shadow-xs'
+                    : 'text-teal-50/90 hover:text-white hover:bg-teal-400/15'
+                }`}
+              >
+                <Icon
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    active ? 'text-[#0f766e]' : 'text-teal-300/85'
+                  }`}
+                />
+                <span>{link.name}</span>
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Desktop Auth / Action Area */}
-        <div className="hidden md:flex items-center gap-2.5">
+        {/* Right: Desktop Auth / Action Area */}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
           <Link
             to="/simulator?scenario=random-obstacles"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-400/20 text-amber-200 border border-amber-300/40 hover:bg-amber-400/30 transition-all"
+            className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-400/20 text-amber-200 border border-amber-300/40 hover:bg-amber-400/30 transition-all whitespace-nowrap"
             title="Launch synchronized 3D & 2D robotics workspace"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
@@ -102,13 +119,14 @@ export function Navbar() {
           {isAuthenticated ? (
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                 className="flex items-center gap-2 p-1 pr-3 rounded-full bg-teal-950/60 hover:bg-teal-900/70 border border-teal-300/30 transition-all"
               >
                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-teal-400 to-sky-500 flex items-center justify-center font-bold text-xs text-white uppercase">
                   {user.name ? user.name[0] : 'U'}
                 </div>
-                <span className="text-xs font-medium text-[#fdfaf0] max-w-[110px] truncate">
+                <span className="text-xs font-medium text-[#fdfaf0] max-w-[100px] truncate">
                   {user.name?.split(' ')[0] || 'User'}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-teal-200" />
@@ -187,6 +205,7 @@ export function Navbar() {
                   <div className="my-1 border-t border-teal-800/15" />
 
                   <button
+                    type="button"
                     onClick={handleSignout}
                     className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-red-600 hover:bg-red-500/10 text-left transition-colors font-medium"
                   >
@@ -200,13 +219,13 @@ export function Navbar() {
             <div className="flex items-center gap-2">
               <Link
                 to="/signin"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-teal-50 hover:bg-teal-400/15 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-teal-50 hover:bg-teal-400/15 transition-colors whitespace-nowrap"
               >
                 Sign In
               </Link>
               <Link
                 to="/signup"
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#fdfaf0] text-[#0c353d] hover:bg-amber-100 transition-colors shadow-sm"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#fdfaf0] text-[#0c353d] hover:bg-amber-100 transition-colors shadow-sm whitespace-nowrap"
               >
                 Create Account
               </Link>
@@ -217,6 +236,7 @@ export function Navbar() {
         {/* Mobile menu hamburger */}
         <div className="flex items-center md:hidden">
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 text-teal-100 hover:text-white"
             aria-label="Toggle Menu"
@@ -253,6 +273,7 @@ export function Navbar() {
           <div className="pt-3 border-t border-teal-400/20 space-y-2">
             {isAuthenticated ? (
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   handleSignout();

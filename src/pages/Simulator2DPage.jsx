@@ -18,6 +18,7 @@ import {
   Sliders,
   ArrowLeftRight,
   Zap,
+  StepBack,
   StepForward,
   FileSpreadsheet,
   FileJson,
@@ -63,14 +64,14 @@ export function Simulator2DPage() {
     planResult,
     executePlan,
     isPlaying,
-    setIsPlaying,
+    togglePlayPause,
+    replaySimulation,
+    stepSimulationForward,
+    stepSimulationBackward,
     playbackSpeed,
     setPlaybackSpeed,
     searchProgress,
-    setSearchProgress,
-    setRobotProgress,
     robotStepIndex,
-    setRobotStepIndex,
     currentExplanation,
     exportCurrentTelemetryCsv,
     exportCurrentTelemetryJson,
@@ -473,13 +474,13 @@ export function Simulator2DPage() {
             onMouseLeave={() => {
               if (isDragging) {
                 setIsDragging(false);
-                executePlan(env, false);
+                executePlan(env, false, null, isPlaying);
               }
             }}
             onMouseUp={() => {
               if (isDragging) {
                 setIsDragging(false);
-                executePlan(env, false);
+                executePlan(env, false, null, isPlaying);
               }
             }}
           >
@@ -569,7 +570,7 @@ export function Simulator2DPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsPlaying((p) => !p)}
+                  onClick={togglePlayPause}
                   className="btn btn-primary btn-sm text-xs"
                 >
                   {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -577,25 +578,24 @@ export function Simulator2DPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsPlaying(false);
-                    setSearchProgress(1);
-                    setRobotStepIndex((prev) =>
-                      Math.min((planResult?.path?.length || 1) - 1, prev + 1)
-                    );
-                  }}
+                  onClick={stepSimulationBackward}
                   className="btn btn-secondary btn-sm text-xs"
+                  title="Step backward"
+                >
+                  <StepBack className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={stepSimulationForward}
+                  className="btn btn-secondary btn-sm text-xs"
+                  title="Step forward"
                 >
                   <StepForward className="w-3.5 h-3.5" />
                   <span>Step</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchProgress(0);
-                    setRobotProgress(0);
-                    setIsPlaying(true);
-                  }}
+                  onClick={replaySimulation}
                   className="btn btn-secondary btn-sm text-xs"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />

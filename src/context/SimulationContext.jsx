@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from 'react';
 import {
   buildOccupancyGrid,
   runPlanner,
@@ -170,9 +178,37 @@ export function SimulationProvider({ children }) {
   const [planResult, setPlanResult] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [searchProgress, setSearchProgress] = useState(1); // 0..1
-  const [robotProgress, setRobotProgress] = useState(0); // 0..1 continuous along path
+  const [searchProgress, setSearchProgressState] = useState(1); // 0..1
+  const [robotProgress, setRobotProgressState] = useState(0); // 0..1 continuous along path
   const [saveFeedback, setSaveFeedback] = useState('');
+
+  // Synchronized ref for deterministic playback loop without nested setState bailouts
+  const progressRef = useRef({ search: 1, robot: 0 });
+  const isPlayingRef = useRef(false);
+
+  const setSearchProgress = useCallback((valOrUpdater) => {
+    const prev = progressRef.current.search;
+    const raw = typeof valOrUpdater === 'function' ? valOrUpdater(prev) : Number(valOrUpdater);
+    const next = Math.max(0, Math.min(1, Number.isFinite(raw) ? raw : 0));
+    progressRef.current.search = next;
+    setSearchProgressState(next);
+  }, []);
+
+  const setRobotProgress = useCallback((valOrUpdater) => {
+    const prev = progressRef.current.robot;
+    const raw = typeof valOrUpdater === 'function' ? valOrUpdater(prev) : Number(valOrUpdater);
+    const next = Math.max(0, Math.min(1, Number.isFinite(raw) ? raw : 0));
+    progressRef.current.robot = next;
+    setRobotProgressState(next);
+  }, []);
+
+  const setIsPlayingSafe = useCallback((valOrUpdater) => {
+    setIsPlaying((prev) => {
+      const next = typeof valOrUpdater === 'function' ? Boolean(valOrUpdater(prev)) : Boolean(valOrUpdater);
+      isPlayingRef.current = next;
+      return next;
+    });
+  }, []);
 
   const plannerMeta = PLANNER_REGISTRY[selectedPlanner] || PLANNER_REGISTRY.ASTAR;
 
@@ -214,7 +250,7 @@ export function SimulationProvider({ children }) {
   }, []);
 
   const executePlan = useCallback(
-    (targetEnv = env, isReplan = false, overridePlanner = null) => {
+    (targetEnv = env, isReplan = false, overridePlanner = null, autoPlay = true) => {
       try {
         const activePlannerId = overridePlanner || selectedPlanner;
         const meta = PLANNER_REGISTRY[activePlannerId] || PLANNER_REGISTRY.ASTAR;
@@ -231,9 +267,17 @@ export function SimulationProvider({ children }) {
         });
 
         setPlanResult(res);
-        setSearchProgress(0);
-        setRobotProgress(0);
-        setIsPlaying(true);
+        if (autoPlay) {
+          progressRef.current = { search: 0, robot: 0 };
+          setSearchProgressState(0);
+          setRobotProgressState(0);
+          setIsPlayingSafe(true);
+        } else {
+          // If recomputed while paused (e.g. obstacle edit), show updated search & clamp robot progress
+          progressRef.current = { search: 1, robot: Math.min(1, progressRef.current.robot) };
+          setSearchProgressState(1);
+          setRobotProgressState(progressRef.current.robot);
+        }
 
         resultsApi.record({
           scenarioId: targetEnv.scenarioId || scenarioId || 'custom-arena',
@@ -259,47 +303,151 @@ export function SimulationProvider({ children }) {
         return null;
       }
     },
-    [env, selectedPlanner, connectivity, heuristic, seed, scenarioId]
+    [env, selectedPlanner, connectivity, heuristic, seed, scenarioId, setIsPlayingSafe]
   );
 
   // Re-run planner automatically when algorithm, heuristic, connectivity, or scenario changes
   useEffect(() => {
-    executePlan(env, false);
+    executePlan(env, false, null, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlanner, heuristic, connectivity]);
 
-  // Progressive animation loop (search wavefront first, then robot navigation)
+  // Progressive animation loop (search wavefront first, then robot navigation — zero nested setState updaters)
   useEffect(() => {
     if (!isPlaying || !planResult) return undefined;
 
     const intervalMs = 30;
     const timer = setInterval(() => {
-      setSearchProgress((prevSearch) => {
-        if (prevSearch < 1) {
-          const nextSearch = Math.min(1, prevSearch + 0.045 * playbackSpeed);
-          return nextSearch;
+      if (!isPlayingRef.current) return;
+
+      const curSearch = progressRef.current.search;
+      const curRobot = progressRef.current.robot;
+      const pathLen = planResult.path?.length || 0;
+      const hasNavigablePath = Boolean(planResult.pathFound && pathLen > 1);
+
+      if (curSearch < 1) {
+        const nextSearch = Math.min(1, curSearch + 0.045 * playbackSpeed);
+        progressRef.current.search = nextSearch;
+        setSearchProgressState(nextSearch);
+        if (nextSearch >= 1 && !hasNavigablePath) {
+          setIsPlayingSafe(false);
         }
-        // Once search wavefront reaches 100%, advance robot along path
-        setRobotProgress((prevRobot) => {
-          const pathLen = planResult.path?.length || 0;
-          if (pathLen <= 1) {
-            setIsPlaying(false);
-            return 0;
-          }
-          const stepDelta = (0.45 * playbackSpeed) / Math.max(1, pathLen - 1);
-          const nextRobot = prevRobot + stepDelta;
-          if (nextRobot >= 1) {
-            setIsPlaying(false);
-            return 1;
-          }
-          return nextRobot;
-        });
-        return 1;
-      });
+        return;
+      }
+
+      if (!hasNavigablePath) {
+        setIsPlayingSafe(false);
+        return;
+      }
+
+      const stepDelta = (0.45 * playbackSpeed) / Math.max(1, pathLen - 1);
+      const nextRobot = Math.min(1, curRobot + stepDelta);
+      progressRef.current.robot = nextRobot;
+      setRobotProgressState(nextRobot);
+
+      if (nextRobot >= 1) {
+        setIsPlayingSafe(false);
+      }
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, planResult, playbackSpeed]);
+  }, [isPlaying, planResult, playbackSpeed, setIsPlayingSafe]);
+
+  // Unified deterministic Play/Pause controller for both 2D and 3D simulators
+  const togglePlayPause = useCallback(() => {
+    if (isPlayingRef.current) {
+      setIsPlayingSafe(false);
+      return;
+    }
+
+    if (!planResult) {
+      executePlan(env, false, null, true);
+      return;
+    }
+
+    const pathLen = planResult.path?.length || 0;
+    const hasNavigablePath = Boolean(planResult.pathFound && pathLen > 1);
+    const isAtEnd =
+      progressRef.current.search >= 0.999 &&
+      (!hasNavigablePath || progressRef.current.robot >= 0.999);
+
+    if (isAtEnd) {
+      progressRef.current = { search: 0, robot: 0 };
+      setSearchProgressState(0);
+      setRobotProgressState(0);
+    }
+
+    setIsPlayingSafe(true);
+  }, [planResult, executePlan, env, setIsPlayingSafe]);
+
+  const replaySimulation = useCallback(() => {
+    if (!planResult) {
+      executePlan(env, false, null, true);
+      return;
+    }
+    progressRef.current = { search: 0, robot: 0 };
+    setSearchProgressState(0);
+    setRobotProgressState(0);
+    setIsPlayingSafe(true);
+  }, [planResult, executePlan, env, setIsPlayingSafe]);
+
+  const stepSimulationForward = useCallback(() => {
+    setIsPlayingSafe(false);
+    if (!planResult) return;
+
+    if (progressRef.current.search < 1) {
+      const nextSearch = Math.min(1, Number((progressRef.current.search + 0.1).toFixed(3)));
+      progressRef.current.search = nextSearch;
+      setSearchProgressState(nextSearch);
+      return;
+    }
+
+    const len = planResult.path?.length || 1;
+    if (len <= 1) return;
+    const currentIdx = Math.min(len - 1, Math.round(progressRef.current.robot * (len - 1)));
+    const nextIdx = Math.min(len - 1, currentIdx + 1);
+    const nextRobot = nextIdx / (len - 1);
+    progressRef.current.robot = nextRobot;
+    setRobotProgressState(nextRobot);
+  }, [planResult, setIsPlayingSafe]);
+
+  const stepSimulationBackward = useCallback(() => {
+    setIsPlayingSafe(false);
+    if (!planResult) return;
+
+    const len = planResult.path?.length || 1;
+    if (progressRef.current.robot > 0 && len > 1) {
+      const currentIdx = Math.min(len - 1, Math.round(progressRef.current.robot * (len - 1)));
+      const nextIdx = Math.max(0, currentIdx - 1);
+      const nextRobot = nextIdx / (len - 1);
+      progressRef.current.robot = nextRobot;
+      setRobotProgressState(nextRobot);
+      return;
+    }
+
+    const nextSearch = Math.max(0, Number((progressRef.current.search - 0.1).toFixed(3)));
+    progressRef.current.search = nextSearch;
+    setSearchProgressState(nextSearch);
+  }, [planResult, setIsPlayingSafe]);
+
+  const scrubTimeline = useCallback(
+    (rawVal) => {
+      setIsPlayingSafe(false);
+      const num = Math.max(0, Math.min(1, Number(rawVal) || 0));
+      if (num <= 0.5) {
+        const nextS = num * 2;
+        progressRef.current = { search: nextS, robot: 0 };
+        setSearchProgressState(nextS);
+        setRobotProgressState(0);
+      } else {
+        const nextR = (num - 0.5) * 2;
+        progressRef.current = { search: 1, robot: nextR };
+        setSearchProgressState(1);
+        setRobotProgressState(nextR);
+      }
+    },
+    [setIsPlayingSafe]
+  );
 
   // Dynamic moving obstacle sweep
   useEffect(() => {
@@ -493,12 +641,18 @@ export function SimulationProvider({ children }) {
   const setRobotStepIndex = useCallback(
     (idxOrUpdater) => {
       const len = planResult?.path?.length || 1;
-      const currentIdx = Math.min(len - 1, Math.round(robotProgress * Math.max(1, len - 1)));
-      const nextIdx = typeof idxOrUpdater === 'function' ? idxOrUpdater(currentIdx) : idxOrUpdater;
+      const currentIdx = Math.min(
+        len - 1,
+        Math.round(progressRef.current.robot * Math.max(1, len - 1))
+      );
+      const nextIdx =
+        typeof idxOrUpdater === 'function' ? idxOrUpdater(currentIdx) : idxOrUpdater;
       const clamped = Math.max(0, Math.min(len - 1, nextIdx));
-      setRobotProgress(len > 1 ? clamped / (len - 1) : 0);
+      const nextR = len > 1 ? clamped / (len - 1) : 0;
+      progressRef.current.robot = nextR;
+      setRobotProgressState(nextR);
     },
-    [planResult, robotProgress]
+    [planResult]
   );
 
   // Derived 3D world coordinates for path, visited, frontier, tree, and robot pose
@@ -785,7 +939,12 @@ export function SimulationProvider({ children }) {
     planResult,
     executePlan,
     isPlaying,
-    setIsPlaying,
+    setIsPlaying: setIsPlayingSafe,
+    togglePlayPause,
+    replaySimulation,
+    stepSimulationForward,
+    stepSimulationBackward,
+    scrubTimeline,
     playbackSpeed,
     setPlaybackSpeed,
     searchProgress,

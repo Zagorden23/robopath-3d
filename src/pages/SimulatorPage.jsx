@@ -84,15 +84,16 @@ export function SimulatorPage() {
     planResult,
     executePlan,
     isPlaying,
-    setIsPlaying,
+    togglePlayPause,
+    replaySimulation,
+    stepSimulationForward,
+    stepSimulationBackward,
+    scrubTimeline,
     playbackSpeed,
     setPlaybackSpeed,
     searchProgress,
-    setSearchProgress,
     robotProgress,
-    setRobotProgress,
     robotStepIndex,
-    setRobotStepIndex,
     worldStart,
     worldGoal,
     worldPath,
@@ -115,6 +116,7 @@ export function SimulatorPage() {
 
   // Sync URL query parameters on initial load (?scenario=..., ?demo=..., ?algorithm=...)
   useEffect(() => {
+    setActiveTool('navigate');
     const qScenario = searchParams.get('scenario') || searchParams.get('demo');
     const qAlgo = searchParams.get('algorithm');
 
@@ -166,15 +168,7 @@ export function SimulatorPage() {
   }, [searchProgress, robotProgress]);
 
   const handleTimelineScrub = (val) => {
-    setIsPlaying(false);
-    const num = Number(val);
-    if (num <= 0.5) {
-      setSearchProgress(num * 2);
-      setRobotProgress(0);
-    } else {
-      setSearchProgress(1);
-      setRobotProgress((num - 0.5) * 2);
-    }
+    scrubTimeline(val);
   };
 
   // Lookup sets for the synchronized Split 2D view
@@ -801,7 +795,7 @@ export function SimulatorPage() {
                 regionStart={regionStart}
                 dynamicObstacleCell={dynamicObstacleCell}
                 onCellInteract={(r, c, isClick) => interactWithCell(r, c, isClick, true)}
-                onFinishDrag={() => executePlan(env, false)}
+                onFinishDrag={() => executePlan(env, false, null, isPlaying)}
                 toggles={toggles}
                 cameraMode={cameraMode}
                 canvasRef={canvasRef}
@@ -815,13 +809,13 @@ export function SimulatorPage() {
                 onMouseLeave={() => {
                   if (isDragging2D) {
                     setIsDragging2D(false);
-                    executePlan(env, false);
+                    executePlan(env, false, null, isPlaying);
                   }
                 }}
                 onMouseUp={() => {
                   if (isDragging2D) {
                     setIsDragging2D(false);
-                    executePlan(env, false);
+                    executePlan(env, false, null, isPlaying);
                   }
                 }}
               >
@@ -902,15 +896,7 @@ export function SimulatorPage() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  if (combinedTimeline >= 0.99) {
-                    setSearchProgress(0);
-                    setRobotProgress(0);
-                    setIsPlaying(true);
-                  } else {
-                    setIsPlaying((p) => !p);
-                  }
-                }}
+                onClick={togglePlayPause}
                 className="btn btn-primary btn-sm text-xs px-3"
               >
                 {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -919,39 +905,25 @@ export function SimulatorPage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsPlaying(false);
-                  setSearchProgress(1);
-                  setRobotStepIndex((idx) => Math.max(0, idx - 1));
-                }}
+                onClick={stepSimulationBackward}
                 className="btn btn-secondary btn-sm text-xs px-2"
-                title="Step backward along path"
+                title="Step backward along path or search"
               >
                 <StepBack className="w-3.5 h-3.5" />
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsPlaying(false);
-                  setSearchProgress(1);
-                  setRobotStepIndex((idx) =>
-                    Math.min((planResult?.path?.length || 1) - 1, idx + 1)
-                  );
-                }}
+                onClick={stepSimulationForward}
                 className="btn btn-secondary btn-sm text-xs px-2"
-                title="Step forward along path"
+                title="Step forward along path or search"
               >
                 <StepForward className="w-3.5 h-3.5" />
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setSearchProgress(0);
-                  setRobotProgress(0);
-                  setIsPlaying(true);
-                }}
+                onClick={replaySimulation}
                 className="btn btn-secondary btn-sm text-xs px-2.5"
                 title="Replay search expansion and robot navigation"
               >

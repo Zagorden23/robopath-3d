@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { SimulationProvider } from './context/SimulationContext.jsx';
 import Navbar from './components/common/Navbar.jsx';
-import AppSidebar from './components/common/AppSidebar.jsx';
 import Footer from './components/common/Footer.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
 
@@ -37,17 +36,12 @@ function RouteLoadingFallback() {
 
 function AppLayout() {
   const location = useLocation();
-  const isLandingOrAuth =
-    location.pathname === '/' ||
-    location.pathname === '/signin' ||
-    location.pathname === '/signup';
   const isFullViewport3D = location.pathname === '/simulator';
 
   return (
     <div className={"flex flex-col min-h-screen " + (isFullViewport3D ? "lg:h-screen lg:overflow-hidden" : "") + " bg-[var(--bg-darkest)] text-[var(--text-primary)]"}>
       <Navbar />
-      <div className="flex-1 flex min-h-0">
-        {!isLandingOrAuth && <AppSidebar />}
+      <div className="flex-1 flex flex-col min-h-0">
         <main className="flex-1 flex flex-col min-w-0 min-h-0">
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>

@@ -192,6 +192,7 @@ export function SimulatorScene({
   const palette = SURFACE_PALETTES[surfaceTheme] || SURFACE_PALETTES['lemon-ivory'];
   const [hoveredCell, setHoveredCell] = useState(null);
   const [isPainting, setIsPainting] = useState(false);
+  const didPaintRef = useRef(false);
 
   const cellSize = gridEnv?.cellSize || environment?.resolution || 0.75;
   const envWidth = gridEnv ? gridEnv.cols * cellSize : environment?.width || 20;
@@ -218,6 +219,7 @@ export function SimulatorScene({
     setHoveredCell({ row, col });
     if (activeTool === 'draw' || activeTool === 'erase') {
       setIsPainting(true);
+      didPaintRef.current = true;
     }
     onCellInteract(row, col, true);
   };
@@ -230,6 +232,7 @@ export function SimulatorScene({
     );
     if (isPainting && onCellInteract && (activeTool === 'draw' || activeTool === 'erase')) {
       e.stopPropagation();
+      didPaintRef.current = true;
       onCellInteract(row, col, false);
     }
   };
@@ -237,9 +240,25 @@ export function SimulatorScene({
   const handlePointerUp = () => {
     if (isPainting) {
       setIsPainting(false);
-      if (onFinishDrag) onFinishDrag();
+      if (didPaintRef.current && onFinishDrag) {
+        didPaintRef.current = false;
+        onFinishDrag();
+      }
     }
   };
+
+  useEffect(() => {
+    if (!isPainting) return undefined;
+    const onWindowPointerUp = () => {
+      setIsPainting(false);
+      if (didPaintRef.current && onFinishDrag) {
+        didPaintRef.current = false;
+        onFinishDrag();
+      }
+    };
+    window.addEventListener('pointerup', onWindowPointerUp);
+    return () => window.removeEventListener('pointerup', onWindowPointerUp);
+  }, [isPainting, onFinishDrag]);
 
   const toolHighlightColor =
     activeTool === 'draw'
@@ -257,7 +276,6 @@ export function SimulatorScene({
       className="w-full h-full relative overflow-hidden select-none"
       style={{ backgroundColor: palette.sky }}
       onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
     >
       <Canvas
         ref={canvasRef}
